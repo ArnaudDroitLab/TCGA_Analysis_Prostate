@@ -92,6 +92,7 @@ allDF$pathologic_T_no_T <- gsub("^T", "", allDF$pathologic_T)
 selectedDF <- with(allDF, data.frame(
     # Patient ID
     patient.id = bcr_patient_uuid,
+    patient.barcode = bcr_patient_barcode,
     
     # Données démographiques et cliniques de base (au moment de la chirurgie)
     age              = -as.numeric(days_to_birth)/365,
@@ -130,7 +131,7 @@ selectedDF <- with(allDF, data.frame(
 write.table(selectedDF, "output/clinical.txt", sep="\t", quote=FALSE, row.names=FALSE, col.names=TRUE)
 
 sink("output/clinical_summary.txt")
-for(i in 2:ncol(selectedDF)) {
+for(i in 3:ncol(selectedDF)) {
    cat(paste(colnames(selectedDF)[i], ":\n"))
 #   print(summary(selectedDF[,i]))
    if(is.numeric(selectedDF[,i])) {
@@ -146,49 +147,38 @@ for(i in 2:ncol(selectedDF)) {
 }
 sink(NULL)
 
-# ggplot(data=selectedDF) + geom_bar(mapping=aes(x=stage, fill=biochemical.relapse, stat="count"))
-# ggplot(data=selectedDF) + geom_bar(mapping=aes(x=stage.category, fill=biochemical.relapse, stat="count"))
-# ggplot(data=selectedDF) + geom_bar(mapping=aes(x=tumor.type, fill=biochemical.relapse, stat="count"))
-# ggplot(data=selectedDF) + geom_bar(mapping=aes(x=limph.node, fill=biochemical.relapse, stat="count"))
-# ggplot(data=selectedDF) + geom_bar(mapping=aes(x=metastases, fill=biochemical.relapse, stat="count"))
-
-# Correlate biochemical relapse with other clinical factors.
-# For binary factors, perform hypertests.
-
-# For ordered parameters, perform logistic regression.
-for(clinical.variable in c("gleason.score")) {
-    model.formula = paste("biochemical.relapse ~ as.numeric(", clinical.variable, ")", sep="")
-    logit.model = glm(eval(parse(text=model.formula)), data = selectedDF, family = "binomial")
-}
-
 # Extremely naive approach: correlate variables one by one, as numeric values.
 results <- c()
-for(i in 2:ncol(selectedDF)) {
+for(i in 3:ncol(selectedDF)) {
     results <- c(results, cor(as.numeric(selectedDF$biochemical.relapse), as.numeric(selectedDF[,i]), use="pairwise.complete.obs"))
 }
-names(results) = colnames(selectedDF)[-1]
+names(results) = colnames(selectedDF)[c(-1, -2)]
+write.table(data.frame(Variable=names(results), Correlation=results), file="output/Naive correlation.txt", col.names=TRUE, row.names=FALSE, sep="\t", quote=FALSE)
+
 
 # Try to see which clinical variable overlap each other
-numeric.matrix <- matrix(0, nrow=nrow(selectedDF), ncol=ncol(selectedDF)-1)
-for(i in 2:ncol(selectedDF)) {
-    numeric.matrix[,i-1] <- as.numeric(selectedDF[,i])
+# Transform the factor matrix into a numeric matrix.
+numeric.matrix <- matrix(0, nrow=nrow(selectedDF), ncol=ncol(selectedDF)-2)
+for(i in 3:ncol(selectedDF)) {
+    numeric.matrix[,i-2] <- scale(as.numeric(selectedDF[,i]), center=TRUE, scale=TRUE)
 }
-colnames(numeric.matrix) = colnames(selectedDF)[-1]
-cor.matrix = cor(numeric.matrix, use="pairwise.complete.obs")
-plot(hclust(dist(scale(cor.matrix, center=TRUE, scale=TRUE))))
+colnames(numeric.matrix) = colnames(selectedDF)[c(-1, -2)]
 
-all.predictive = c("age", "race", "tumor.type", "psa.preop", "gleason.score", "gleason.category", "stage", "stage.category", "limph.node", "metastases", "lymphocyte.infiltration", "monocyte.infiltration" , "necrosis", "neutrophil.infiltration", "normal.cells", "stromal.cells", "tumor.cells", "tumor.nuclei")
-cor.matrix = cor(numeric.matrix[,colnames(numeric.matrix) %in% all.predictive], use="pairwise.complete.obs")
-plot(hclust(dist(scale(cor.matrix, center=TRUE, scale=TRUE))))
+# Cluster all variables.
+pdf("output/Cluster all clinical.pdf")
+plot(hclust(dist(t(numeric.matrix))))
+dev.off()
 
+# Cluster only predictive, non-redundant variables.
 predictive.non.redundant = c("age", "race", "tumor.type", "psa.preop", "gleason.score", "stage", "limph.node", "metastases", "lymphocyte.infiltration", "monocyte.infiltration" , "necrosis", "neutrophil.infiltration", "stromal.cells", "tumor.cells")
-cor.matrix = cor(numeric.matrix[,colnames(numeric.matrix) %in% predictive.non.redundant], use="pairwise.complete.obs")
-plot(hclust(dist(scale(cor.matrix, center=TRUE, scale=TRUE))))
+num2.matrix = cbind(numeric.matrix[,colnames(numeric.matrix) %in% predictive.non.redundant], biochemical.relapse=as.numeric(selectedDF$biochemical.relapse))
+pdf("output/Cluster predictive non redundant clinical.pdf")
+plot(hclust(dist(t(num2.matrix))))
+dev.off()
 
-cor.matrix = cor(cbind(numeric.matrix[,colnames(numeric.matrix) %in% predictive.non.redundant], biochemical.relapse=as.numeric(selectedDF$biochemical.relapse)), use="pairwise.complete.obs")
-plot(hclust(dist(scale(cor.matrix, center=TRUE, scale=TRUE))))
-
-test.model = glm(biochemical.relapse ~ as.numeric(psa.preop) + as.numeric(gleason.score) + as.numeric(stage) + as.numeric(limph.node), family="binomial", data=selectedDF)
-summary(test.model)
-
+# Build a logistic regression model
+test.model = glm(biochemical.relapse ~ as.numeric(psa.preop) + as.numeric(gleason.score) + as.numeric(stage) + limph.node + tumor.type, family="binomial", data=selectedDF)
+sink("output/glm results.txt")
+print(summary(test.model))
+sink(NULL)
 # Look at hyper enrichment for all parametric factors
