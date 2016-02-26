@@ -1,5 +1,6 @@
 # Load libraries.
 library(ggplot2)
+library(survival)
 
 # Set working directory.
 setwd("C:/Users/Eric/Desktop/Bergeron/")
@@ -50,11 +51,11 @@ metadata = cbind(metadata, selectedDF[match(gsub("-..$", "", metadata$Sample), a
 #goi <- c(3567, 3596, 6352, 4283, 3627, 90865, 916, 920, 925, 3458, 7124, 3002)
 
 # All genes of interest (eosinophiles)
-goi <- c(27181, 3568, 1232, 5553, 6036, 8288, 6037, 1178, 6356, 6369, 10344,
-         3567, 3596, 6352, 4283, 3627, 90865, 916, 920, 925, 3458, 7124, 3002)
+goi.eosino <- c(27181, 3568, 1232, 5553, 6036, 8288, 6037, 1178, 6356, 6369, 10344,
+                3567, 3596, 6352, 4283, 3627, 90865, 916, 920, 925, 3458, 7124, 3002)
          
 # All genes of interest (dendrites)
-goi <- c(6346, 9308, 30835, 1235, 913, 909, 941, 942, 1236, 6367, 958)
+goi.dendrites <- c(6346, 9308, 30835, 1235, 913, 909, 941, 942, 1236, 6367, 958)
          
          
 pos.control.str = "ACTG2
@@ -84,8 +85,9 @@ TNS1"
          
 pos.control = unlist(strsplit(pos.control.str, split="\n"))
          
-goi <- results$Entrez.Gene.ID[results$Symbol %in% pos.control]
+goi.pos <- results$Entrez.Gene.ID[results$Symbol %in% pos.control]
 
+goi <- c(goi.eosino, goi.dendrites, as.integer(as.character(goi.pos)))
          
 dir.create("output/profiles/", recursive=TRUE, showWarnings=FALSE)
 relapse.stats = data.frame(Entrez=character(0), Symbol=character(0), p.val=numeric(0), conf.low=numeric(0), conf.high=numeric(0))
@@ -97,8 +99,8 @@ for(gene in goi) {
     
     expDF = data.frame(Expression=expr.levels,
                        TissueType=metadata$Type,
-                       Relapse=metadata$biochemical.relapse,
-                       Gleason=metadata$gleason.score,
+                       Relapse=metadata$years.to.relapse,
+                       Gleason=metadata$gleason.category,
                        Exclude=metadata$Exclude)
                        
     symbol = results$Symbol[results$Entrez.Gene.ID == gene]
@@ -106,19 +108,19 @@ for(gene in goi) {
     
     # Analyze relationship to chemical relapse.
     exp.subset = subset(expDF, Exclude==FALSE & TissueType=="Tumor" & !is.na(Relapse))
-    ggplot(exp.subset, aes(x=Relapse, y=log2(Expression + 1), fill=Relapse)) + geom_boxplot()
+    ggplot(exp.subset, aes(x=Relapse, y=log2(Expression + 1))) + geom_point()
     ggsave(paste0("output/profiles/", symbol, "/", gene, " - ", symbol, " vs biochemical.relapse.pdf"))
     
-    t.results = t.test(log2(subset(exp.subset, Relapse=="YES")$Expression + 1),
-                       log2(subset(exp.subset, Relapse=="NO")$Expression + 1))
+    #t.results = t.test(log2(subset(exp.subset, Relapse=="YES")$Expression + 1),
+    #                   log2(subset(exp.subset, Relapse=="NO")$Expression + 1))
     cor.expr.relapse = cor(as.numeric(exp.subset$Relapse), log2(exp.subset$Expression + 1), use="pairwise.complete.obs")
                        
-    relapse.stats = rbind(relapse.stats,
-                          data.frame(Entrez=gene,
-                                     Symbol=symbol,
-                                     p.val=t.results$p.value,
-                                     conf.low=t.results$conf.int[1],
-                                     conf.high=t.results$conf.int[2]))
+#    relapse.stats = rbind(relapse.stats,
+#                          data.frame(Entrez=gene,
+#                                     Symbol=symbol,
+#                                     p.val=t.results$p.value,
+#                                     conf.low=t.results$conf.int[1],
+#                                     conf.high=t.results$conf.int[2]))
 
     # Analyze relationship to gleason score
     exp.subset = subset(expDF, Exclude==FALSE & TissueType=="Tumor" & !is.na(Gleason))
@@ -217,6 +219,7 @@ sink("output/SIGLEC8 + IL5RA vs Gleason GLM.txt")
 summary(glm.fit)
 sink(NULL)                   
 
+# Test various combinations of SIGLEC8/IL5RA dichotomization and see which ones gie the most significant results.
 for(i in seq(0.2, 0.8, by=0.1)) {
     expDF.copy1 = expDF
     
@@ -241,45 +244,41 @@ for(i in seq(0.2, 0.8, by=0.1)) {
 }     
 
                   
+
+                             
+goi.expr = log2(t(results[as.character(results$Entrez.Gene.ID) %in% goi, -c(1,2)]) + 1)
+colnames(goi.expr) = as.character(results[as.character(results$Entrez.Gene.ID) %in% goi,"Symbol"])
+expDF = cbind(goi.expr, metadata)
+
+resultsDF = data.frame(Entrez.ID=numeric(0), Symbol=character(0),
+                       uni.pval=numeric(0), uni.conf.low=numeric(0), uni.conf.high=numeric(0),
+                       multi.pval=numeric(0), multi.conf.low=numeric(0), multi.conf.high=numeric(0))
+
+for(gene in goi) {
     symbol = results$Symbol[results$Entrez.Gene.ID == gene]
-    dir.create(file.path("output/profiles/", symbol), recursive=TRUE, showWarnings=FALSE)
-    
-    # Analyze relationship to chemical relapse.
-    exp.subset = subset(expDF, Exclude==FALSE & TissueType=="Tumor" & !is.na(Relapse))
-    ggplot(exp.subset, aes(x=Relapse, y=log2(Expression + 1), fill=Relapse)) + geom_boxplot()
-    ggsave(paste0("output/profiles/", symbol, "/", gene, " - ", symbol, " vs biochemical.relapse.pdf"))
-    
-    t.results = t.test(log2(subset(exp.subset, Relapse=="YES")$Expression + 1),
-                       log2(subset(exp.subset, Relapse=="NO")$Expression + 1))
-    cor.expr.relapse = cor(as.numeric(exp.subset$Relapse), log2(exp.subset$Expression + 1), use="pairwise.complete.obs")
-                       
-    relapse.stats = rbind(relapse.stats,
-                          data.frame(Entrez=gene,
-                                     Symbol=symbol,
-                                     p.val=t.results$p.value,
-                                     conf.low=t.results$conf.int[1],
-                                     conf.high=t.results$conf.int[2]))
 
-    # Analyze relationship to gleason score
-    exp.subset = subset(expDF, Exclude==FALSE & TissueType=="Tumor" & !is.na(Gleason))
-    ggplot(exp.subset, aes(x=Gleason, y=log2(Expression + 1))) + geom_boxplot()
-    ggsave(paste0("output/profiles/", symbol, "/", gene, " - ", symbol, " vs gleason.score.pdf"))
+    uni.model.str = paste0("Surv(time.to.event, event.type) ~ ", symbol)
+    uni.model = coxph(as.formula(uni.model.str), data=expDF)
     
-    expr.glm = glm(Expression ~ as.numeric(Gleason), data=exp.subset)
-    cor.expr.gleason = cor(as.numeric(exp.subset$Gleason), log2(exp.subset$Expression + 1), use="pairwise.complete.obs")
-    gleason.stats = rbind(gleason.stats,
-                          data.frame(Entrez=gene,
-                                     Symbol=symbol,
-                                     p.val=coef(summary(expr.glm))["as.numeric(Gleason)",4],
-                                     coef=expr.glm$coefficients["as.numeric(Gleason)"]))
+    multi.model.str = paste0("Surv(time.to.event, event.type) ~ as.numeric(gleason.category) + as.numeric(stage) + ", symbol)
+    multi.model = coxph(as.formula(multi.model.str), data=expDF)
+    
+    resultsDF <- rbind(resultsDF,
+                       data.frame(Entrez.ID=gene,
+                                  Symbol=symbol,
+                                  uni.pval=coefficients(summary(uni.model))[as.character(symbol), "Pr(>|z|)"],
+                                  uni.conf.low=summary(uni.model)$conf.int[as.character(symbol), "lower .95"],
+                                  uni.conf.high=summary(uni.model)$conf.int[as.character(symbol), "upper .95"],
+                                  multi.pval=coefficients(summary(multi.model))[as.character(symbol), "Pr(>|z|)"],
+                                  multi.conf.low=summary(multi.model)$conf.int[as.character(symbol), "lower .95"],
+                                  multi.conf.high=summary(multi.model)$conf.int[as.character(symbol), "upper .95"]))
+}
 
-    # Caculate relapse -> gleason correlation as a basis for comparison.
-    cor.gleason.relapse = cor(as.numeric(expDF$Relapse), as.numeric(expDF$Gleason), use="pairwise.complete.obs")
-                                     
-    cor.stats = rbind(cor.stats, 
-                      data.frame(Entrez=gene,
-                                 Symbol=symbol,
-                                 Expr.Relapse=cor.expr.relapse,
-                                 Expr.Gleason=cor.expr.gleason,
-                                 Gleason.Relapse=cor.gleason.relapse))
+    
 
+cox.fit = coxph(Surv(time.to.event, event.type) ~ SIGLEC8, data=expDF)
+
+cox.fit = coxph(Surv(time.to.event, event.type) ~ as.numeric(gleason.category) + as.numeric(stage) + CCL1 + CCL22 + CCR6 + CCR7 + CD1A + CD1E + CD209 + CD40 + CD80 + CD83 + CD86, data=expDF)
+cox.fit = coxph(Surv(time.to.event, event.type) ~ as.numeric(gleason.category) + as.numeric(stage) + CD80 + CD83 + CD86, data=expDF)
+
+cox.fit = coxph(Surv(time.to.event, event.type) ~ as.numeric(gleason.category) + as.numeric(stage) + ACTG2+ CALD1+CBX3+DCHS1+DKK3+DPT+FLNA+FLNC+GAS1+GSN+HIST1H3D+LIMS2+LMOD1+MT1X+MYH11+MYLK+PDLIM3+PDLIM7+RASL12+SH3BGRL+SMTN+SORBS1+SSBP1+TNS1, data=expDF)

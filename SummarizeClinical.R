@@ -116,6 +116,7 @@ selectedDF <- with(allDF, data.frame(
     castrate.resistant  = factorize.castrate.resistant(days_to_second_biochemical_recurrence),
     #castrate.resistant  = factor(tumor_progression_post_ht, levels_except_NA(tumor_progression_post_ht)),
     death               = factorize.death(vital_status, patient_death_reason),
+    years.to.death      = as.numeric(days_to_death) / 365,
     
     # Données de base sur l'infiltration tumorale
     lymphocyte.infiltration = factorize_percent(percent_lymphocyte_infiltration),
@@ -181,4 +182,49 @@ test.model = glm(biochemical.relapse ~ as.numeric(psa.preop) + as.numeric(gleaso
 sink("output/glm results.txt")
 print(summary(test.model))
 sink(NULL)
-# Look at hyper enrichment for all parametric factors
+
+# Do Cox proportional hazard regression.
+# Code time to event and censoring.
+selectedDF$time.to.event <- with(selectedDF, pmin(years.to.relapse, follow.up, years.to.death, na.rm=TRUE))
+selectedDF$event.type <- with(selectedDF, ifelse(!is.na(years.to.relapse), 1, 0))
+
+# Fit model
+cox.fit = coxph(Surv(time.to.event, event.type) ~ as.numeric(gleason.category) + as.numeric(stage.category) + limph.node + as.numeric(psa.preop) + tumor.type + age, data=selectedDF)
+sink("output/cox fit.txt")
+print(summary(cox.fit))
+sink(NULL)
+
+# Plot average survival time
+pdf(width=7, height=7, file="output/overall survival.pdf")
+plot(survfit(cox.fit), ylim=c(0.5, 1), xlab="Years", ylab="Proportion without recurrence")
+dev.off()
+
+# Plot effects of gleason category on time to recurrence.
+selectedDF.gleason <- with(selectedDF, data.frame(gleason.category = c(0, 1, 2, 3),
+                                                  stage      = rep(mean(as.numeric(stage),      na.rm=TRUE), 4),
+                                                  limph.node = rep(mean(as.numeric(limph.node), na.rm=TRUE), 4),
+                                                  psa.preop  = rep(mean(as.numeric(psa.preop),  na.rm=TRUE), 4),
+                                                  tumor.type = rep(mean(as.numeric(tumor.type), na.rm=TRUE), 4),
+                                                  age        = rep(mean(age, na.rm=TRUE), 4)))
+                                                  
+pdf(width=7, height=7, file="output/gleason survival.pdf")
+plot(survfit(cox.fit, newdata=selectedDF.gleason), conf.int=FALSE, mark.time=FALSE,
+    lty=c(1, 2, 3, 4), ylim=c(0.4, 1), xlab="Years",
+    ylab="Proportion without recurrence")
+legend("bottomleft", legend=levels(selectedDF$gleason.category), lty=c(1 ,2, 3, 4), inset=0.02)
+dev.off()
+
+# Plot effects of gleason score on stage.category to recurrence.
+selectedDF.stage <- with(selectedDF, data.frame(stage.category = c(0, 1, 2),
+                                                gleason.category = rep(mean(as.numeric(gleason.category), na.rm=TRUE), 3),
+                                                limph.node       = rep(mean(as.numeric(limph.node),       na.rm=TRUE), 3),
+                                                psa.preop        = rep(mean(as.numeric(psa.preop),        na.rm=TRUE), 3),
+                                                tumor.type       = rep(mean(as.numeric(tumor.type),       na.rm=TRUE), 3),
+                                                age              = rep(mean(age, na.rm=TRUE), 3)))
+                                                  
+pdf(width=7, height=7, file="output/stage survival.pdf")
+plot(survfit(cox.fit, newdata=selectedDF.stage), conf.int=FALSE, mark.time=FALSE,
+    lty=c(1, 2, 3),  ylim=c(0.3, 1), xlab="Years",
+    ylab="Proportion without recurrence")
+legend("bottomleft", legend=levels(selectedDF$stage.category), lty=c(1 ,2, 3), inset=0.02)
+dev.off()
