@@ -1,4 +1,5 @@
 library(TCGAbiolinks)
+library(survival)
 
 setwd("C:/Users/Eric/Desktop/Bergeron/")
 dir.create("output")
@@ -131,10 +132,14 @@ selectedDF <- with(allDF, data.frame(
     
 write.table(selectedDF, "output/clinical.txt", sep="\t", quote=FALSE, row.names=FALSE, col.names=TRUE)
 
+
+# Summarize clinical data in pseudo table form
 sink("output/clinical_summary.txt")
 for(i in 3:ncol(selectedDF)) {
+   #Print variable name
    cat(paste(colnames(selectedDF)[i], ":\n"))
-#   print(summary(selectedDF[,i]))
+
+   # Print either the counts or the mean/median, depending on the data type.
    if(is.numeric(selectedDF[,i])) {
        cat("\tMean:", mean(selectedDF[,i], na.rm=TRUE), "\n")
        cat("\tMedian:", median(selectedDF[,i], na.rm=TRUE), "\n")
@@ -149,12 +154,14 @@ for(i in 3:ncol(selectedDF)) {
 sink(NULL)
 
 # Extremely naive approach: correlate variables one by one, as numeric values.
-results <- c()
+cor.to.relapse <- c()
 for(i in 3:ncol(selectedDF)) {
-    results <- c(results, cor(as.numeric(selectedDF$biochemical.relapse), as.numeric(selectedDF[,i]), use="pairwise.complete.obs"))
+    cor.to.relapse <- c(cor.to.relapse, cor(as.numeric(selectedDF$biochemical.relapse),
+                                            as.numeric(selectedDF[,i]),
+                                            use="pairwise.complete.obs"))
 }
-names(results) = colnames(selectedDF)[c(-1, -2)]
-write.table(data.frame(Variable=names(results), Correlation=results), file="output/Naive correlation.txt", col.names=TRUE, row.names=FALSE, sep="\t", quote=FALSE)
+names(cor.to.relapse) = colnames(selectedDF)[c(-1, -2)]
+write.table(data.frame(Variable=names(cor.to.relapse), Correlation=cor.to.relapse), file="output/Naive correlation.txt", col.names=TRUE, row.names=FALSE, sep="\t", quote=FALSE)
 
 
 # Try to see which clinical variable overlap each other
@@ -167,7 +174,8 @@ colnames(numeric.matrix) = colnames(selectedDF)[c(-1, -2)]
 
 # Cluster all variables.
 pdf("output/Cluster all clinical.pdf")
-plot(hclust(dist(t(numeric.matrix))))
+# Do not cluster follow.up since it is orthogonal to years.to.death, and is also useless.
+plot(hclust(dist(t(numeric.matrix[,colnames(numeric.matrix)!="years.to.death"]))))
 dev.off()
 
 # Cluster only predictive, non-redundant variables.
@@ -179,7 +187,7 @@ dev.off()
 
 # Build a logistic regression model
 test.model = glm(biochemical.relapse ~ as.numeric(psa.preop) + as.numeric(gleason.score) + as.numeric(stage) + limph.node + tumor.type, family="binomial", data=selectedDF)
-sink("output/glm results.txt")
+sink("output/logistic regression of relapse on clinical variables.txt")
 print(summary(test.model))
 sink(NULL)
 
@@ -189,19 +197,19 @@ selectedDF$time.to.event <- with(selectedDF, pmin(years.to.relapse, follow.up, y
 selectedDF$event.type <- with(selectedDF, ifelse(!is.na(years.to.relapse), 1, 0))
 
 # Fit model
-cox.fit = coxph(Surv(time.to.event, event.type) ~ as.numeric(gleason.category) + as.numeric(stage) + limph.node + as.numeric(psa.preop) + tumor.type + age, data=selectedDF)
-sink("output/cox fit.txt")
+cox.fit = coxph(Surv(time.to.event, event.type) ~ as.numeric(gleason.category) + as.numeric(stage.category) + limph.node + as.numeric(psa.preop) + tumor.type + age, data=selectedDF)
+sink("output/Cox regression of clinical variables.txt")
 print(summary(cox.fit))
 sink(NULL)
 
 # Plot average survival time
-pdf(width=7, height=7, file="output/overall survival.pdf")
+pdf(width=7, height=7, file="output/Overall survival.pdf")
 plot(survfit(cox.fit), ylim=c(0.5, 1), xlab="Years", ylab="Proportion without recurrence")
 dev.off()
 
 # Plot effects of gleason category on time to recurrence.
 selectedDF.gleason <- with(selectedDF, data.frame(gleason.category = c(0, 1, 2, 3),
-                                                  stage      = rep(mean(as.numeric(stage),      na.rm=TRUE), 4),
+                                                  stage.category   = rep(mean(as.numeric(stage.category),      na.rm=TRUE), 4),
                                                   limph.node = rep(mean(as.numeric(limph.node), na.rm=TRUE), 4),
                                                   psa.preop  = rep(mean(as.numeric(psa.preop),  na.rm=TRUE), 4),
                                                   tumor.type = rep(mean(as.numeric(tumor.type), na.rm=TRUE), 4),
