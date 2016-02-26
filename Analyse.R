@@ -22,7 +22,7 @@ for(file.name in genes.normalized.file) {
        # For the first file, get the gene IDs as well as the normalized counts.
        id.vector = unlist(strsplit(file.content$gene_id, "|", fixed=TRUE))
        symbols.vector = id.vector[seq(1, length(id.vector) - 1, by=2)]
-       entrez.id.vector = id.vector[seq(2, length(id.vector), by=2)]
+       entrez.id.vector = as.integer(id.vector[seq(2, length(id.vector), by=2)])
 
        results <- data.frame(Symbol = symbols.vector, Entrez.Gene.ID = entrez.id.vector, file.content$normalized_count)
        colnames(results)[3] <- uuid
@@ -30,6 +30,7 @@ for(file.name in genes.normalized.file) {
        results[,uuid] <- file.content$normalized_count
    }
 }
+rownames(results) = results$Entrez.Gene.ID
 
 # Load patient barcode -> file name mapping.
 file.manifest = read.table("TCGA/file_manifest.txt", sep="\t", header=TRUE)
@@ -51,8 +52,8 @@ metadata = cbind(metadata, selectedDF[match(gsub("-..$", "", metadata$Sample), a
 #goi <- c(3567, 3596, 6352, 4283, 3627, 90865, 916, 920, 925, 3458, 7124, 3002)
 
 # All genes of interest (eosinophiles)
-goi.eosino <- c(27181, 3568, 1232, 5553, 6036, 8288, 6037, 1178, 6356, 6369, 10344,
-                3567, 3596, 6352, 4283, 3627, 90865, 916, 920, 925, 3458, 7124, 3002)
+goi.eosino.1 <- c(27181, 3568, 1232, 5553, 6036, 8288, 6037, 1178, 6356, 6369, 10344)
+goi.eosino.2 <- c(3567, 3596, 6352, 4283, 3627, 90865, 916, 920, 925, 3458, 7124, 3002)
          
 # All genes of interest (dendrites)
 goi.dendrites <- c(6346, 9308, 30835, 1235, 913, 909, 941, 942, 1236, 6367, 958)
@@ -87,7 +88,12 @@ pos.control = unlist(strsplit(pos.control.str, split="\n"))
          
 goi.pos <- results$Entrez.Gene.ID[results$Symbol %in% pos.control]
 
-goi <- c(goi.eosino, goi.dendrites, as.integer(as.character(goi.pos)))
+goi <- c(goi.eosino, goi.dendrites, goi.pos)
+goi.all = goi
+goi.list = list(Eosiniphiles.1 = goi.eosino.1,
+                Eosiniphiles.2 = goi.eosino.2,
+                Dendrites      = goi.dendrites,
+                Pos.control    = as.integer(as.character(goi.pos)))
          
 dir.create("output/profiles/", recursive=TRUE, showWarnings=FALSE)
 relapse.stats = data.frame(Entrez=character(0), Symbol=character(0), p.val=numeric(0), conf.low=numeric(0), conf.high=numeric(0))
@@ -243,42 +249,39 @@ for(i in seq(0.2, 0.8, by=0.1)) {
     }
 }     
 
-                  
 
-                             
-goi.expr = log2(t(results[as.character(results$Entrez.Gene.ID) %in% goi, -c(1,2)]) + 1)
-colnames(goi.expr) = as.character(results[as.character(results$Entrez.Gene.ID) %in% goi,"Symbol"])
+goi.expr = log2(t(results[results$Entrez.Gene.ID %in% goi.all, -c(1,2)]) + 1)
+colnames(goi.expr) = as.character(results[results$Entrez.Gene.ID %in% goi.all, "Symbol"])
 expDF = cbind(goi.expr, metadata)
 
-resultsDF = data.frame(Entrez.ID=numeric(0), Symbol=character(0),
-                       uni.pval=numeric(0), uni.conf.low=numeric(0), uni.conf.high=numeric(0),
-                       multi.pval=numeric(0), multi.conf.low=numeric(0), multi.conf.high=numeric(0))
+for(i in 1:length(goi.list)) {
+    goi = goi.list[[i]]
+    label = names(goi.list)[i]
 
-for(gene in goi) {
-    symbol = results$Symbol[results$Entrez.Gene.ID == gene]
-
-    uni.model.str = paste0("Surv(time.to.event, event.type) ~ ", symbol)
-    uni.model = coxph(as.formula(uni.model.str), data=expDF)
+    resultsDF = data.frame(Entrez.ID=numeric(0), Symbol=character(0),
+                           uni.pval=numeric(0), uni.conf.low=numeric(0), uni.conf.high=numeric(0),
+                           multi.pval=numeric(0), multi.conf.low=numeric(0), multi.conf.high=numeric(0))
     
-    multi.model.str = paste0("Surv(time.to.event, event.type) ~ as.numeric(gleason.category) + as.numeric(stage) + ", symbol)
-    multi.model = coxph(as.formula(multi.model.str), data=expDF)
+    for(gene in goi) {
+        symbol = results$Symbol[results$Entrez.Gene.ID == gene]
     
-    resultsDF <- rbind(resultsDF,
-                       data.frame(Entrez.ID=gene,
-                                  Symbol=symbol,
-                                  uni.pval=coefficients(summary(uni.model))[as.character(symbol), "Pr(>|z|)"],
-                                  uni.conf.low=summary(uni.model)$conf.int[as.character(symbol), "lower .95"],
-                                  uni.conf.high=summary(uni.model)$conf.int[as.character(symbol), "upper .95"],
-                                  multi.pval=coefficients(summary(multi.model))[as.character(symbol), "Pr(>|z|)"],
-                                  multi.conf.low=summary(multi.model)$conf.int[as.character(symbol), "lower .95"],
-                                  multi.conf.high=summary(multi.model)$conf.int[as.character(symbol), "upper .95"]))
-}
+        uni.model.str = paste0("Surv(time.to.event, event.type) ~ ", symbol)
+        uni.model = coxph(as.formula(uni.model.str), data=expDF)
+        
+        multi.model.str = paste0("Surv(time.to.event, event.type) ~ as.numeric(gleason.category) + as.numeric(stage) + ", symbol)
+        multi.model = coxph(as.formula(multi.model.str), data=expDF)
+        
+        resultsDF <- rbind(resultsDF,
+                           data.frame(Entrez.ID=gene,
+                                      Symbol=symbol,
+                                      univariate.pval=coefficients(summary(uni.model))[as.character(symbol), "Pr(>|z|)"],
+                                      univariate.conf.low=summary(uni.model)$conf.int[as.character(symbol), "lower .95"],
+                                      univariate.conf.high=summary(uni.model)$conf.int[as.character(symbol), "upper .95"],
+                                      multivariate.pval=coefficients(summary(multi.model))[as.character(symbol), "Pr(>|z|)"],
+                                      multivariate.conf.low=summary(multi.model)$conf.int[as.character(symbol), "lower .95"],
+                                      multivariate.conf.high=summary(multi.model)$conf.int[as.character(symbol), "upper .95"]))
+    }
 
+    write.table(resultsDF, file=paste0("output/Cox regression for ", label, ".txt"), col.names=TRUE, row.names=FALSE, sep="\t")
     
-
-cox.fit = coxph(Surv(time.to.event, event.type) ~ SIGLEC8, data=expDF)
-
-cox.fit = coxph(Surv(time.to.event, event.type) ~ as.numeric(gleason.category) + as.numeric(stage) + CCL1 + CCL22 + CCR6 + CCR7 + CD1A + CD1E + CD209 + CD40 + CD80 + CD83 + CD86, data=expDF)
-cox.fit = coxph(Surv(time.to.event, event.type) ~ as.numeric(gleason.category) + as.numeric(stage) + CD80 + CD83 + CD86, data=expDF)
-
-cox.fit = coxph(Surv(time.to.event, event.type) ~ as.numeric(gleason.category) + as.numeric(stage) + ACTG2+ CALD1+CBX3+DCHS1+DKK3+DPT+FLNA+FLNC+GAS1+GSN+HIST1H3D+LIMS2+LMOD1+MT1X+MYH11+MYLK+PDLIM3+PDLIM7+RASL12+SH3BGRL+SMTN+SORBS1+SSBP1+TNS1, data=expDF)
+}    

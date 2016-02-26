@@ -189,7 +189,7 @@ selectedDF$time.to.event <- with(selectedDF, pmin(years.to.relapse, follow.up, y
 selectedDF$event.type <- with(selectedDF, ifelse(!is.na(years.to.relapse), 1, 0))
 
 # Fit model
-cox.fit = coxph(Surv(time.to.event, event.type) ~ as.numeric(gleason.category) + as.numeric(stage.category) + limph.node + as.numeric(psa.preop) + tumor.type + age, data=selectedDF)
+cox.fit = coxph(Surv(time.to.event, event.type) ~ as.numeric(gleason.category) + as.numeric(stage) + limph.node + as.numeric(psa.preop) + tumor.type + age, data=selectedDF)
 sink("output/cox fit.txt")
 print(summary(cox.fit))
 sink(NULL)
