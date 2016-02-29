@@ -8,6 +8,8 @@ setwd("C:/Users/Eric/Desktop/Bergeron/")
 # Read and summarize the clinical variables.
 source("SummarizeClinical.R")
 
+#source("SummarizeExpression.R")
+
 # Read in expression info which was summarized by SummarizeExpression.R
 expr.data = read.table("output/Expression summary.txt", sep="\t", check.names = FALSE)
 
