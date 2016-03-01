@@ -24,7 +24,7 @@ for(i in 1:length(goi.list)) {
         print(summary(uni.model))
         sink(NULL)
         
-        multi.model.str = paste0("Surv(time.to.event, event.type) ~ as.numeric(gleason.category) + as.numeric(stage) + ", symbol)
+        multi.model.str = paste0("Surv(time.to.event, event.type) ~ gleason.category + stage.category + ", symbol)
         multi.model = coxph(as.formula(multi.model.str), data=expDF)
         sink(file.path(output.dir, "Multivariate model.txt"))
         print(summary(multi.model))
@@ -35,14 +35,14 @@ for(i in 1:length(goi.list)) {
                                       Symbol=symbol,
                                       univariate.pval=coefficients(summary(uni.model))[as.character(symbol), "Pr(>|z|)"],
                                       univariate.hr=summary(uni.model)$conf.int[as.character(symbol), "exp(coef)"],
-                                      univariate.conf.low=summary(uni.model)$conf.int[as.character(symbol), "lower .95"],
-                                      univariate.conf.high=summary(uni.model)$conf.int[as.character(symbol), "upper .95"],
+                                      univariate.hr.conf.low=summary(uni.model)$conf.int[as.character(symbol), "lower .95"],
+                                      univariate.hr.conf.high=summary(uni.model)$conf.int[as.character(symbol), "upper .95"],
                                       multivariate.pval=coefficients(summary(multi.model))[as.character(symbol), "Pr(>|z|)"],
                                       multivariate.hr=summary(multi.model)$conf.int[as.character(symbol), "exp(coef)"],
-                                      multivariate.conf.low=summary(multi.model)$conf.int[as.character(symbol), "lower .95"],
-                                      multivariate.conf.high=summary(multi.model)$conf.int[as.character(symbol), "upper .95"]))
+                                      multivariate.hr.conf.low=summary(multi.model)$conf.int[as.character(symbol), "lower .95"],
+                                      multivariate.hr.conf.high=summary(multi.model)$conf.int[as.character(symbol), "upper .95"]))
     }
 
-    write.table(resultsDF, file=paste0("output/survival/", label, ".txt"), col.names=TRUE, row.names=FALSE, sep="\t")
+    write.table(resultsDF[order(resultsDF$multivariate.pval),], file=paste0("output/survival/", label, ".txt"), col.names=TRUE, row.names=FALSE, sep="\t")
     
 }    

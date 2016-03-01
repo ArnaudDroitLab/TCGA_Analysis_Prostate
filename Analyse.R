@@ -51,4 +51,4 @@ goi.list = list(Eosiniphiles.1 = goi.eosino.1,
                 Dendrites      = goi.dendrites,
                 Pos.control    = as.integer(as.character(goi.pos)))
 
-
+source("Survival analysis.R")

@@ -49,12 +49,25 @@ levels_except_NA <- function(x) {
 
 factorize.gleason.category <- function(primary.pattern, secondary.pattern) {
     results <- rep(NA, length(primary.pattern))
-    results[as.numeric(primary.pattern) + as.numeric(secondary.pattern) <= 6] <- "<=6"
-    results[as.numeric(primary.pattern) == 3 & as.numeric(secondary.pattern) == 4] <- "=3, 4"
-    results[as.numeric(primary.pattern) == 4 & as.numeric(secondary.pattern) == 3] <- "=4, 3"
+    #results[as.numeric(primary.pattern) + as.numeric(secondary.pattern) <= 6] <- "<=6"
+    #results[as.numeric(primary.pattern) == 3 & as.numeric(secondary.pattern) == 4] <- "=3, 4"
+    #results[as.numeric(primary.pattern) == 4 & as.numeric(secondary.pattern) == 3] <- "=4, 3"
+    results[as.numeric(primary.pattern) + as.numeric(secondary.pattern) <= 7] <- "<=7"
     results[as.numeric(primary.pattern) + as.numeric(secondary.pattern) >= 8] <- ">=8"
     
-    return(factor(results))    
+    return(factor(results, levels=c("<=7", ">=8")))    
+}
+
+factorize.stage.category <- function(stage) {
+    results <- rep(NA, length(stage))
+
+    # Remove letter
+    no.letter = gsub("[abc]$", "", stage)
+    
+    results[no.letter == "2"] <- "2"
+    results[no.letter == "3" | no.letter == "4"] <- ">=3"
+    
+    return(factor(results, levels=c("2", ">=3")))
 }
 
 factorize.clinical.metastasis <- function(anatomic.site, site.text) {
@@ -104,7 +117,7 @@ selectedDF <- with(allDF, data.frame(
     gleason.score    = factor(as.numeric(gleason_score)),
     gleason.category = factorize.gleason.category(primary_pattern, secondary_pattern),
     stage            = factor(pathologic_T_no_T, levels_except_NA(pathologic_T_no_T)),
-    stage.category   = factor(gsub("[abc]$", "", pathologic_T_no_T), levels_except_NA(gsub("[abc]$", "", pathologic_T_no_T))),
+    stage.category   = factorize.stage.category(pathologic_T_no_T),
     limph.node       = factor(gsub("[1-9]", "x", pathologic_N), levels_except_NA(gsub("[1-9]", "x", pathologic_N))),
     metastases       = factor(gsub("1[a-c]", "x", clinical_M),  levels_except_NA(gsub("1[a-c]", "x", clinical_M))),
     # Capsular penetration?
@@ -197,42 +210,42 @@ selectedDF$time.to.event <- with(selectedDF, pmin(years.to.relapse, follow.up, y
 selectedDF$event.type <- with(selectedDF, ifelse(!is.na(years.to.relapse), 1, 0))
 
 # Fit model
-cox.fit = coxph(Surv(time.to.event, event.type) ~ as.numeric(gleason.category) + as.numeric(stage.category) + limph.node + as.numeric(psa.preop) + tumor.type + age, data=selectedDF)
+cox.fit = coxph(Surv(time.to.event, event.type) ~ gleason.category + stage.category + limph.node + as.numeric(psa.preop) + tumor.type + age, data=selectedDF)
 sink("output/Cox regression of clinical variables.txt")
 print(summary(cox.fit))
 sink(NULL)
 
 # Plot average survival time
 pdf(width=7, height=7, file="output/Overall survival.pdf")
-plot(survfit(cox.fit), ylim=c(0.5, 1), xlab="Years", ylab="Proportion without recurrence")
+plot(survfit(cox.fit), ylim=c(0.5, 1), xlab="Years", ylab="Survival")
 dev.off()
 
 # Plot effects of gleason category on time to recurrence.
-selectedDF.gleason <- with(selectedDF, data.frame(gleason.category = c(0, 1, 2, 3),
-                                                  stage.category   = rep(mean(as.numeric(stage.category),      na.rm=TRUE), 4),
-                                                  limph.node = rep(mean(as.numeric(limph.node), na.rm=TRUE), 4),
-                                                  psa.preop  = rep(mean(as.numeric(psa.preop),  na.rm=TRUE), 4),
-                                                  tumor.type = rep(mean(as.numeric(tumor.type), na.rm=TRUE), 4),
-                                                  age        = rep(mean(age, na.rm=TRUE), 4)))
+selectedDF.gleason <- with(selectedDF, data.frame(gleason.category = levels(selectedDF$gleason.category),
+                                                  stage.category   = rep(mean(as.numeric(stage.category),      na.rm=TRUE), 2),
+                                                  limph.node = rep(mean(as.numeric(limph.node), na.rm=TRUE), 2),
+                                                  psa.preop  = rep(mean(as.numeric(psa.preop),  na.rm=TRUE), 2),
+                                                  tumor.type = rep(mean(as.numeric(tumor.type), na.rm=TRUE), 2),
+                                                  age        = rep(mean(age, na.rm=TRUE), 2)))
                                                   
 pdf(width=7, height=7, file="output/gleason survival.pdf")
 plot(survfit(cox.fit, newdata=selectedDF.gleason), conf.int=FALSE, mark.time=FALSE,
-    lty=c(1, 2, 3, 4), ylim=c(0.4, 1), xlab="Years",
-    ylab="Proportion without recurrence")
-legend("bottomleft", legend=levels(selectedDF$gleason.category), lty=c(1 ,2, 3, 4), inset=0.02)
+    lty=c(1, 2, 3, 4), ylim=c(0, 1), xlab="Years",
+    ylab="Survival")
+legend("topright", legend=levels(selectedDF$gleason.category), lty=c(1 ,2), inset=0.02)
 dev.off()
 
 # Plot effects of gleason score on stage.category to recurrence.
-selectedDF.stage <- with(selectedDF, data.frame(stage.category = c(0, 1, 2),
-                                                gleason.category = rep(mean(as.numeric(gleason.category), na.rm=TRUE), 3),
-                                                limph.node       = rep(mean(as.numeric(limph.node),       na.rm=TRUE), 3),
-                                                psa.preop        = rep(mean(as.numeric(psa.preop),        na.rm=TRUE), 3),
-                                                tumor.type       = rep(mean(as.numeric(tumor.type),       na.rm=TRUE), 3),
-                                                age              = rep(mean(age, na.rm=TRUE), 3)))
+selectedDF.stage <- with(selectedDF, data.frame(stage.category   = levels(stage.category),
+                                                gleason.category = rep(mean(as.numeric(gleason.category), na.rm=TRUE), 2),
+                                                limph.node       = rep(mean(as.numeric(limph.node),       na.rm=TRUE), 2),
+                                                psa.preop        = rep(mean(as.numeric(psa.preop),        na.rm=TRUE), 2),
+                                                tumor.type       = rep(mean(as.numeric(tumor.type),       na.rm=TRUE), 2),
+                                                age              = rep(mean(age, na.rm=TRUE), 2)))
                                                   
 pdf(width=7, height=7, file="output/stage survival.pdf")
 plot(survfit(cox.fit, newdata=selectedDF.stage), conf.int=FALSE, mark.time=FALSE,
-    lty=c(1, 2, 3),  ylim=c(0.3, 1), xlab="Years",
-    ylab="Proportion without recurrence")
-legend("bottomleft", legend=levels(selectedDF$stage.category), lty=c(1 ,2, 3), inset=0.02)
+    lty=c(1, 2),  ylim=c(0, 1), xlab="Years",
+    ylab="Survival")
+legend("topright", legend=levels(selectedDF$stage.category), lty=c(1 ,2, 3), inset=0.02)
 dev.off()
