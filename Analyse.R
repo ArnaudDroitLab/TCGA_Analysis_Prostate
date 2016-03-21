@@ -44,11 +44,20 @@ goi.dendrites <- c(6346, 9308, 30835, 1235, 913, 909, 941, 942, 1236, 6367, 958)
 pos.control.str = c("ACTG2", "CALD1", "CBX3", "DCHS1", "DKK3", "DPT", "FLNA", "FLNC", "GAS1", "GSN", "HIST1H3D", "LIMS2", "LMOD1", "MT1X", "MYH11", "MYLK", "PDLIM3", "PDLIM7", "RASL12", "SH3BGRL", "SMTN", "SORBS1", "SSBP1", "TNS1")
 goi.pos <- expr.data$Entrez.Gene.ID[expr.data$Symbol %in% pos.control.str]
 
-goi.all <- c(goi.eosino.1, goi.eosino.2, goi.dendrites, goi.pos)
+goi.glucose <- c(6513, 6515, 6517, 29988, 66035, 154091, 6523, 3098, 3099, 3101, 2645)
 
-goi.list = list(Eosiniphiles.1 = goi.eosino.1,
-                Eosiniphiles.2 = goi.eosino.2,
-                Dendrites      = goi.dendrites,
-                Pos.control    = as.integer(as.character(goi.pos)))
+goi.ac.loss <- c(4907, 7779, 170691, 56971, 3269, 116441, 84525, 203102, 2131, 54840)
+goi.ac.gain <- c(149233, 170589, 220323, 4088, 23192, 1739, 387129, 7010, 54980)
+
+goi.all <- c(goi.eosino.1, goi.eosino.2, goi.dendrites, goi.pos, goi.glucose, goi.ac.loss, goi.ac.gain)
+
+goi.list = list(Eosiniphiles.1   = goi.eosino.1,
+                Eosiniphiles.2   = goi.eosino.2,
+                Dendrites        = goi.dendrites,
+                Pos.control      = as.integer(as.character(goi.pos)),
+                Glucose          = goi.glucose,
+                Acetylation.loss = goi.ac.loss,
+                Acetylation.gain = goi.ac.gain)
 
 source("Survival analysis.R")
+source("GleasonGLM.R")

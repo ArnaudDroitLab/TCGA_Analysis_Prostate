@@ -47,15 +47,24 @@ levels_except_NA <- function(x) {
     return(sort(setdiff(unique(x), c("[Not Available]", "[Not Applicable]", "[Discrepancy]", "[Unknown]"))))
 }
 
-factorize.gleason.category <- function(primary.pattern, secondary.pattern) {
+factorize.gleason.category.2 <- function(primary.pattern, secondary.pattern) {
     results <- rep(NA, length(primary.pattern))
-    #results[as.numeric(primary.pattern) + as.numeric(secondary.pattern) <= 6] <- "<=6"
-    #results[as.numeric(primary.pattern) == 3 & as.numeric(secondary.pattern) == 4] <- "=3, 4"
-    #results[as.numeric(primary.pattern) == 4 & as.numeric(secondary.pattern) == 3] <- "=4, 3"
+ 
     results[as.numeric(primary.pattern) + as.numeric(secondary.pattern) <= 7] <- "<=7"
     results[as.numeric(primary.pattern) + as.numeric(secondary.pattern) >= 8] <- ">=8"
     
     return(factor(results, levels=c("<=7", ">=8")))    
+}
+
+factorize.gleason.category.4 <- function(primary.pattern, secondary.pattern) {
+    results <- rep(NA, length(primary.pattern))
+    
+    results[as.numeric(primary.pattern) + as.numeric(secondary.pattern) <= 6] <- "<=6"
+    results[as.numeric(primary.pattern) == 3 & as.numeric(secondary.pattern) == 4] <- "=3, 4"
+    results[as.numeric(primary.pattern) == 4 & as.numeric(secondary.pattern) == 3] <- "=4, 3"
+    results[as.numeric(primary.pattern) + as.numeric(secondary.pattern) >= 8] <- ">=8"
+    
+    return(factor(results, levels=c("<=6", "=3, 4", "=4, 3", ">=8")))    
 }
 
 factorize.stage.category <- function(stage) {
@@ -109,17 +118,19 @@ selectedDF <- with(allDF, data.frame(
     patient.barcode = bcr_patient_barcode,
     
     # Données démographiques et cliniques de base (au moment de la chirurgie)
-    age              = -as.numeric(days_to_birth)/365,
-    follow.up        = as.numeric(days_to_last_followup)/365,
-    race             = factor(race, levels_except_NA(race)),
-    tumor.type       = factor(histological_type, levels_except_NA(histological_type)),
-    psa.preop        = cut(as.numeric(psa_result_preop), c(0, 4,10,20, Inf), right=FALSE, include.lowest=TRUE),
-    gleason.score    = factor(as.numeric(gleason_score)),
-    gleason.category = factorize.gleason.category(primary_pattern, secondary_pattern),
-    stage            = factor(pathologic_T_no_T, levels_except_NA(pathologic_T_no_T)),
-    stage.category   = factorize.stage.category(pathologic_T_no_T),
-    limph.node       = factor(gsub("[1-9]", "x", pathologic_N), levels_except_NA(gsub("[1-9]", "x", pathologic_N))),
-    metastases       = factor(gsub("1[a-c]", "x", clinical_M),  levels_except_NA(gsub("1[a-c]", "x", clinical_M))),
+    age                = -as.numeric(days_to_birth)/365,
+    follow.up          = as.numeric(days_to_last_followup)/365,
+    race               = factor(race, levels_except_NA(race)),
+    tumor.type         = factor(histological_type, levels_except_NA(histological_type)),
+    psa.preop          = cut(as.numeric(psa_result_preop), c(0, 4,10,20, Inf), right=FALSE, include.lowest=TRUE),
+    gleason.score      = factor(as.numeric(gleason_score)),
+    gleason.category   = factorize.gleason.category.2(primary_pattern, secondary_pattern),
+    gleason.category.2 = factorize.gleason.category.2(primary_pattern, secondary_pattern),
+    gleason.category.4 = factorize.gleason.category.4(primary_pattern, secondary_pattern),
+    stage              = factor(pathologic_T_no_T, levels_except_NA(pathologic_T_no_T)),
+    stage.category     = factorize.stage.category(pathologic_T_no_T),
+    limph.node         = factor(gsub("[1-9]", "x", pathologic_N), levels_except_NA(gsub("[1-9]", "x", pathologic_N))),
+    metastases         = factor(gsub("1[a-c]", "x", clinical_M),  levels_except_NA(gsub("1[a-c]", "x", clinical_M))),
     # Capsular penetration?
     # Margin status?
     
