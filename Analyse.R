@@ -8,7 +8,7 @@ setwd("C:/Users/Eric/Desktop/Bergeron/")
 # Read and summarize the clinical variables.
 source("SummarizeClinical.R")
 
-#source("SummarizeExpression.R")
+source("SummarizeExpression.R")
 
 # Read in expression info which was summarized by SummarizeExpression.R
 expr.data = read.table("output/Expression summary.txt", sep="\t", check.names = FALSE)
@@ -49,7 +49,7 @@ goi.glucose <- c(6513, 6515, 6517, 29988, 66035, 154091, 6523, 3098, 3099, 3101,
 goi.ac.loss <- c(4907, 7779, 170691, 56971, 3269, 116441, 84525, 203102, 2131, 54840)
 goi.ac.gain <- c(149233, 170589, 220323, 4088, 23192, 1739, 387129, 7010, 54980)
 
-goi.all <- c(goi.eosino.1, goi.eosino.2, goi.dendrites, goi.pos, goi.glucose, goi.ac.loss, goi.ac.gain)
+goi.checkpoint <- c(135, 8764, 151888, 84868, 3965, 1493, 5133, 29126, 80380, 3902, 2669, 126259, 11148, 7293, 7292, 3604, 8744, 939, 970, 29851, 23308, 8784, 8995, 958, 959, 962, 51744, 5819, 201633, 10666, 5817)
 
 goi.list = list(Eosiniphiles.1   = goi.eosino.1,
                 Eosiniphiles.2   = goi.eosino.2,
@@ -57,7 +57,10 @@ goi.list = list(Eosiniphiles.1   = goi.eosino.1,
                 Pos.control      = as.integer(as.character(goi.pos)),
                 Glucose          = goi.glucose,
                 Acetylation.loss = goi.ac.loss,
-                Acetylation.gain = goi.ac.gain)
+                Acetylation.gain = goi.ac.gain,
+                Checkpoint = goi.chekcpoint)
 
+goi.all = unlist(goi.list)                
+                
 source("Survival analysis.R")
 source("GleasonGLM.R")
