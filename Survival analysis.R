@@ -19,13 +19,13 @@ for(i in 1:length(goi.list)) {
         dir.create(output.dir, recursive=TRUE, showWarnings=FALSE)
     
         uni.model.str = paste0("Surv(time.to.event, event.type) ~ ", symbol)
-        uni.model = coxph(as.formula(uni.model.str), data=expDF)
+        uni.model = coxph(as.formula(uni.model.str), data=expDF[expDF$Type=="Tumor",])
         sink(file.path(output.dir, "Univariate model.txt"))
         print(summary(uni.model))
         sink(NULL)
         
         multi.model.str = paste0("Surv(time.to.event, event.type) ~ gleason.category + stage.category + ", symbol)
-        multi.model = coxph(as.formula(multi.model.str), data=expDF)
+        multi.model = coxph(as.formula(multi.model.str), data=expDF[expDF$Type=="Tumor",])
         sink(file.path(output.dir, "Multivariate model.txt"))
         print(summary(multi.model))
         sink(NULL)

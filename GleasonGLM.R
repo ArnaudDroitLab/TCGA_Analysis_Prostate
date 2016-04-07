@@ -20,14 +20,16 @@ for(i in 1:length(goi.list)) {
         output.dir = file.path("output/gleason.glm/", label, symbol)
         dir.create(output.dir, recursive=TRUE, showWarnings=FALSE)
     
+        expDF.subset = (!is.na(expDF$gleason.category) & expDF$Type=="Tumor")
+    
         uni.model.str = paste0(symbol, "~ gleason.category.4")
-        uni.model = glm(as.formula(uni.model.str), data=expDF[!is.na(expDF$gleason.category),])
+        uni.model = glm(as.formula(uni.model.str), data=expDF[expDF.subset,])
         sink(file.path(output.dir, "GLM.txt"))
         print(summary(uni.model))
         sink(NULL)
         
 
-        ggplot(expDF[!is.na(expDF$gleason.category),], mapping=aes_string(y=as.character(symbol), x="gleason.category.4")) + geom_boxplot()
+        ggplot(expDF[expDF.subset,], mapping=aes_string(y=as.character(symbol), x="gleason.category.4")) + geom_boxplot()
         ggsave(file.path(output.dir, "boxplot.pdf"), width=7, height=7)
         
         resultsDF <- rbind(resultsDF,

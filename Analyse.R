@@ -58,7 +58,7 @@ goi.list = list(Eosiniphiles.1   = goi.eosino.1,
                 Glucose          = goi.glucose,
                 Acetylation.loss = goi.ac.loss,
                 Acetylation.gain = goi.ac.gain,
-                Checkpoint = goi.chekcpoint)
+                Checkpoint       = goi.checkpoint)
 
 goi.all = unlist(goi.list)                
                 
